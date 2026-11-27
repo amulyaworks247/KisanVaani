@@ -1,1 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KisanVaani</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0fdf4;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+        h1 { color: #166534; }
+        .mic-button {
+            background-color: #22c55e;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 200px;
+            height: 200px;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 10px 25px rgba(34, 197, 94, 0.4);
+            transition: transform 0.1s;
+        }
+        .mic-button:active { transform: scale(0.95); }
+        .mic-button.listening {
+            animation: pulse 1.5s infinite;
+            background-color: #ef4444;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 30px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        #result-card {
+            margin-top: 40px;
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: none;
+            min-width: 300px;
+        }
+        .price-text { font-size: 48px; font-weight: bold; color: #15803d; margin: 10px 0; }
+        .crop-text { font-size: 24px; color: #333; }
+        .instruction { margin-top: 20px; color: #666; font-size: 14px;}
+    </style>
+</head>
+<body>
 
+    <h1>KisanVaani</h1>
+    <p>Tap to Speak (English/Hindi/Marathi)</p>
+    
+    <button id="micBtn" class="mic-button">🎤 TAP</button>
+    
+    <div class="instruction" id="statusText">Waiting for your voice...</div>
+
+    <div id="result-card">
+        <div class="crop-text" id="cropName">Crop</div>
+        <div class="price-text" id="priceValue">₹0</div>
+        <div id="voiceReply" style="font-size: 18px; color: #555; margin-top: 10px;"></div>
+    </div>
+
+    <script>
+        const micBtn = document.getElementById('micBtn');
+        const statusText = document.getElementById('statusText');
+        const resultCard = document.getElementById('result-card');
+        const cropName = document.getElementById('cropName');
+        const priceValue = document.getElementById('priceValue');
+        const voiceReply = document.getElementById('voiceReply');
+
+        let recognition;
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-IN'; // Can be changed to 'hi-IN' or 'mr-IN'
+
+            recognition.onstart = function() {
+                micBtn.classList.add('listening');
+                micBtn.innerHTML = "Listening...";
+                statusText.innerText = "Speak now...";
+            };
+
+            recognition.onresult = function(event) {
+                const transcript = event.results[0][0].transcript;
+                statusText.innerText = "You said: " + transcript;
+                processSpeech(transcript);
+            };
+
+            recognition.onerror = function(event) {
+                statusText.innerText = "Error: " + event.error;
+                resetMic();
+            };
+
+            recognition.onend = function() {
+                resetMic();
+            };
+        } else {
+            statusText.innerText = "Your browser does not support speech recognition. Please use Chrome.";
+        }
+
+        micBtn.onclick = function() {
+            if (recognition) {
+                resultCard.style.display = 'none';
+                recognition.start();
+            }
+        };
+
+        function resetMic() {
+            micBtn.classList.remove('listening');
+            micBtn.innerHTML = "🎤 TAP";
+        }
+
+        function processSpeech(text) {
+            // Send to our Python backend
+            fetch('/api/voice', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: text })
+            })
+            .then(response => response.json())
+            .then(data => {
+                resultCard.style.display = 'block';
+                if (data.crop) {
+                    cropName.innerText = data.crop;
+                    priceValue.innerText = "₹" + data.price;
+                } else {
+                    cropName.innerText = "Not Found";
+                    priceValue.innerText = "---";
+                }
+                voiceReply.innerText = data.spoken_response;
+                
+                // Speak the response back
+                speakText(data.spoken_response);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                statusText.innerText = "Connection error.";
+            });
+        }
+
+        function speakText(text) {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'en-IN'; // Can be changed based on language
+                utterance.rate = 0.9; // Slightly slower for better understanding
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+    </script>
+</body>
+</html>
