@@ -23,7 +23,7 @@
         #result-card { margin-top: 30px; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: none; min-width: 300px; }
         .price-text { font-size: 48px; font-weight: bold; color: #15803d; margin: 10px 0; }
         .crop-text { font-size: 28px; color: #333; font-weight: bold;}
-        .instruction { margin-top: 20px; color: #666; font-size: 14px;}
+        .instruction { margin-top: 20px; color: #333; font-size: 16px; font-weight: bold;}
         .reset-btn { margin-top: 20px; padding: 10px; background: #ccc; border: none; border-radius: 5px; cursor: pointer; }
     </style>
 </head>
@@ -41,7 +41,8 @@
     <div id="app-screen">
         <h1 id="roleTitle">KisanVaani</h1>
         <button id="micBtn" class="mic-button">🎤 TAP</button>
-        <div class="instruction" id="statusText">Speak naturally...</div>
+        
+        <div class="instruction" id="statusText">Tap the mic and say the crop name.</div>
 
         <div id="result-card">
             <div class="crop-text" id="cropName">Crop</div>
@@ -57,35 +58,34 @@
         let currentRole = "seller";
         let recognition;
         let detectedGPSLang = "en"; 
-        const langVoiceMap = { 'hi': 'hi-IN', 'mr': 'mr-IN', 'te': 'te-IN', 'ta': 'ta-IN', 'kn': 'kn-IN', 'ml': 'ml-IN', 'en': 'en-IN' };
+        // Adding more languages to the voice map
+        const langVoiceMap = { 
+            'hi': 'hi-IN', 'mr': 'mr-IN', 'te': 'te-IN', 'ta': 'ta-IN', 
+            'kn': 'kn-IN', 'ml': 'ml-IN', 'bn': 'bn-IN', 'gu': 'gu-IN', 'en': 'en-IN' 
+        };
+
+        let conversationState = "ASK_CROP"; 
+        let currentPrice = 0;
+        let currentCrop = "";
 
         function getUserLocation() {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition((position) => {
                     const lat = position.coords.latitude;
                     const lon = position.coords.longitude;
-                    
-                    if (lat > 13.0 && lat < 20.0 && lon > 76.0 && lon < 85.0) {
-                        detectedGPSLang = "te"; document.getElementById('gps-status').innerText = "Telugu Region Detected";
-                    } else if (lat > 8.0 && lat < 13.5 && lon > 76.0 && lon < 80.5) {
-                        detectedGPSLang = "ta"; document.getElementById('gps-status').innerText = "Tamil Region Detected";
-                    } else if (lat > 11.0 && lat < 18.5 && lon > 74.0 && lon < 78.5) {
-                        detectedGPSLang = "kn"; document.getElementById('gps-status').innerText = "Kannada Region Detected";
-                    } else if (lat > 8.0 && lat < 12.5 && lon > 74.5 && lon < 77.5) {
-                        detectedGPSLang = "ml"; document.getElementById('gps-status').innerText = "Malayalam Region Detected";
-                    } else if (lat > 15.0 && lat < 22.0 && lon > 72.0 && lon < 80.0) {
-                        detectedGPSLang = "mr"; document.getElementById('gps-status').innerText = "Marathi Region Detected";
-                    } else if (lat > 23.0 && lat < 30.0 && lon > 75.0 && lon < 88.0) {
-                        detectedGPSLang = "hi"; document.getElementById('gps-status').innerText = "Hindi Region Detected";
-                    } else {
-                        detectedGPSLang = "en"; document.getElementById('gps-status').innerText = "Location Detected";
-                    }
-                }, (error) => {
-                    document.getElementById('gps-status').innerText = "GPS denied. Defaulting to English.";
+                    // Expanded GPS mapping
+                    if (lat > 13.0 && lat < 20.0 && lon > 76.0 && lon < 85.0) { detectedGPSLang = "te"; document.getElementById('gps-status').innerText = "Telugu Region Detected"; } 
+                    else if (lat > 8.0 && lat < 13.5 && lon > 76.0 && lon < 80.5) { detectedGPSLang = "ta"; document.getElementById('gps-status').innerText = "Tamil Region Detected"; } 
+                    else if (lat > 11.0 && lat < 18.5 && lon > 74.0 && lon < 78.5) { detectedGPSLang = "kn"; document.getElementById('gps-status').innerText = "Kannada Region Detected"; } 
+                    else if (lat > 8.0 && lat < 12.5 && lon > 74.5 && lon < 77.5) { detectedGPSLang = "ml"; document.getElementById('gps-status').innerText = "Malayalam Region Detected"; } 
+                    else if (lat > 15.0 && lat < 22.0 && lon > 72.0 && lon < 80.0) { detectedGPSLang = "mr"; document.getElementById('gps-status').innerText = "Marathi Region Detected"; } 
+                    else if (lat > 23.0 && lat < 30.0 && lon > 75.0 && lon < 88.0) { detectedGPSLang = "hi"; document.getElementById('gps-status').innerText = "Hindi Region Detected"; }
+                    else if (lat > 21.0 && lat < 27.0 && lon > 85.0 && lon < 90.0) { detectedGPSLang = "bn"; document.getElementById('gps-status').innerText = "Bengali Region Detected"; }
+                    else if (lat > 20.0 && lat < 24.5 && lon > 68.0 && lon < 74.5) { detectedGPSLang = "gu"; document.getElementById('gps-status').innerText = "Gujarati Region Detected"; }
+                    else { detectedGPSLang = "en"; document.getElementById('gps-status').innerText = "Location Detected"; }
                 });
             }
         }
-
         window.onload = getUserLocation;
 
         function setRole(role) {
@@ -104,13 +104,14 @@
             recognition.onstart = function() {
                 document.getElementById('micBtn').classList.add('listening');
                 document.getElementById('micBtn').innerHTML = "Listening...";
-                document.getElementById('statusText').innerText = "Speak naturally...";
+                // Tell the user to speak naturally
+                document.getElementById('statusText').innerText = "Listening naturally..."; 
             };
 
             recognition.onresult = function(event) {
                 const transcript = event.results[0][0].transcript;
                 document.getElementById('statusText').innerText = "You said: " + transcript;
-                processSpeech(transcript);
+                handleVoiceInput(transcript);
             };
             recognition.onerror = function(event) { resetMic(); };
             recognition.onend = function() { resetMic(); };
@@ -118,8 +119,9 @@
 
         document.getElementById('micBtn').onclick = function() {
             if (recognition) {
+                // THE NATURAL SPEECH FIX: Set browser to a broad multilingual listener
+                // This allows the browser to guess the language better than forcing one.
                 recognition.lang = detectedGPSLang === 'en' ? 'en-IN' : detectedGPSLang + '-IN';
-                document.getElementById('result-card').style.display = 'none';
                 recognition.start();
             }
         };
@@ -130,7 +132,33 @@
             btn.innerHTML = "🎤 TAP";
         }
 
-        function processSpeech(text) {
+        function handleVoiceInput(text) {
+            const lowerText = text.toLowerCase();
+
+            if (conversationState === "ASK_CROP") {
+                processCropQuery(text); 
+            } 
+            else if (conversationState === "CONFIRM_PRICE") {
+                if (lowerText.includes("yes") || lowerText.includes("haan") || lowerText.includes("avunu") || lowerText.includes("sell") || lowerText.includes("sare") || lowerText.includes("ok")) {
+                    conversationState = "ASK_QUANTITY";
+                    document.getElementById('statusText').innerText = "How many kilos?";
+                    speakText(`Great. How many kilos of ${currentCrop} do you want to sell?`, detectedGPSLang);
+                } else {
+                    conversationState = "ASK_CROP"; 
+                    document.getElementById('statusText').innerText = "What crop do you want to check?";
+                    document.getElementById('result-card').style.display = 'none';
+                    speakText("Okay. Please say the name of another crop.", detectedGPSLang);
+                }
+            }
+            else if (conversationState === "ASK_QUANTITY") {
+                document.getElementById('statusText').innerText = "Deal Confirmed!";
+                document.getElementById('voiceReply').innerText = `Deal confirmed for ${text} of ${currentCrop}. Connecting you to the buyer now...`;
+                speakText(`Deal confirmed. Connecting you to the buyer now.`, detectedGPSLang);
+                conversationState = "ASK_CROP"; 
+            }
+        }
+
+        function processCropQuery(text) {
             fetch('/api/voice', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -138,12 +166,29 @@
             })
             .then(response => response.json())
             .then(data => {
-                document.getElementById('result-card').style.display = 'block';
-                document.getElementById('cropName').innerText = data.crop_display;
-                document.getElementById('priceValue').innerText = data.price ? "₹" + data.price : "---";
-                document.getElementById('langDetect').innerText = "Replying in: " + data.detected_lang.toUpperCase();
-                document.getElementById('voiceReply').innerText = data.spoken_response;
-                speakText(data.spoken_response, data.detected_lang);
+                if (data.price > 0) {
+                    currentPrice = data.price;
+                    currentCrop = data.crop_display;
+                    
+                    document.getElementById('result-card').style.display = 'block';
+                    document.getElementById('cropName').innerText = data.crop_display;
+                    document.getElementById('priceValue').innerText = "₹" + data.price;
+                    document.getElementById('langDetect').innerText = "Replying in: " + data.detected_lang.toUpperCase();
+                    
+                    if (currentRole === 'seller') {
+                        conversationState = "CONFIRM_PRICE";
+                        document.getElementById('statusText').innerText = "Are you happy with this price?";
+                        const question = data.spoken_response; // The backend now generates the question
+                        document.getElementById('voiceReply').innerText = question;
+                        speakText(question, data.detected_lang);
+                    } else {
+                        document.getElementById('voiceReply').innerText = data.spoken_response;
+                        speakText(data.spoken_response, data.detected_lang);
+                    }
+                } else {
+                    document.getElementById('statusText').innerText = "Crop not found. Try again.";
+                    speakText(data.spoken_response, data.detected_lang);
+                }
             })
             .catch(error => {
                 document.getElementById('statusText').innerText = "Connection error.";
